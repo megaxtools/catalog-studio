@@ -1,0 +1,199 @@
+{
+  "key": "snappshop",
+  "name": "اسنپ‌شاپ",
+  "domains": [
+    "snappshop.ir"
+  ],
+  "notes": "صفحه‌ها در مرورگر باز می‌شوند. داده‌های JSON-LD، Next.js و درخواست‌های شبکه در «آزمایش زنده» دیده می‌شوند تا مسیر دقیق هر فیلد را تنظیم کنید.",
+  "sample_category_url": "https://snappshop.ir/category/car-oil-antifreeze",
+  "sample_product_url": "https://snappshop.ir/product/snp-759275655",
+  "product_id_pattern": "snp-(\\d+)",
+  "listing": {
+    "mode": "browser",
+    "link_pattern": "/product/snp-\\d+",
+    "pagination": {
+      "type": "param",
+      "param": "page",
+      "start": 1,
+      "max_pages": 300
+    },
+    "scroll_times": 6
+  },
+  "product": {
+    "mode": "browser",
+    "capture_xhr": [
+      "*"
+    ],
+    "auto_expand": true,
+    "scroll": true,
+    "scroll_times": 6
+  },
+  "request": {
+    "headers": {},
+    "timeout_s": 45
+  },
+  "max_gallery": 12,
+  "fields": [
+    {
+      "key": "title",
+      "strategies": [
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "name"
+        },
+        {
+          "type": "css",
+          "selector": "h1",
+          "attr": "text"
+        },
+        {
+          "type": "auto"
+        }
+      ]
+    },
+    {
+      "key": "title_en",
+      "strategies": [
+        {
+          "type": "spec",
+          "names": [
+            "نام انگلیسی",
+            "English name"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "brand",
+      "strategies": [
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "brand.name"
+        },
+        {
+          "type": "spec",
+          "names": [
+            "برند",
+            "نام تجاری",
+            "سازنده"
+          ]
+        },
+        {
+          "type": "auto"
+        }
+      ]
+    },
+    {
+      "key": "category",
+      "strategies": [
+        {
+          "type": "auto"
+        }
+      ]
+    },
+    {
+      "key": "breadcrumb",
+      "strategies": [
+        {
+          "type": "auto"
+        }
+      ]
+    },
+    {
+      "key": "short_description",
+      "strategies": [
+        {
+          "type": "meta",
+          "name": "description"
+        },
+        {
+          "type": "meta",
+          "name": "og:description"
+        }
+      ]
+    },
+    {
+      "key": "long_description",
+      "strategies": [
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "description"
+        },
+        {
+          "type": "auto"
+        }
+      ]
+    },
+    {
+      "key": "specifications",
+      "strategies": [
+        {
+          "type": "auto"
+        }
+      ]
+    },
+    {
+      "key": "featured_image",
+      "strategies": [
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "image[0]"
+        },
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "image"
+        },
+        {
+          "type": "meta",
+          "name": "og:image"
+        },
+        {
+          "type": "auto"
+        }
+      ]
+    },
+    {
+      "key": "gallery",
+      "strategies": [
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "image"
+        },
+        {
+          "type": "auto"
+        }
+      ]
+    },
+    {
+      "key": "price",
+      "strategies": [
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "offers.price"
+        },
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "offers.lowPrice"
+        }
+      ]
+    },
+    {
+      "key": "sku",
+      "strategies": [
+        {
+          "type": "jsonld",
+          "at_type": "Product",
+          "path": "sku"
+        }
+      ]
+    }
+  ]
+}

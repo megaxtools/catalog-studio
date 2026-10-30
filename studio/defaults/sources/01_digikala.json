@@ -1,0 +1,290 @@
+{
+  "key": "digikala",
+  "name": "دیجی‌کالا",
+  "domains": [
+    "digikala.com"
+  ],
+  "notes": "فهرست و جزئیات محصول از API عمومی دیجی‌کالا خوانده می‌شود؛ اگر API پاسخ ندهد، صفحه‌ی محصول در مرورگر باز و درخواست‌های شبکه‌ی آن ضبط می‌شود.",
+  "sample_category_url": "https://www.digikala.com/search/category-engine-oil/",
+  "sample_product_url": "https://www.digikala.com/product/dkp-9975369/",
+  "product_id_pattern": "dkp-(\\d+)",
+  "listing": {
+    "mode": "api",
+    "api": {
+      "url": "https://api.digikala.com/v1/categories/{slug}/search/?page={page}",
+      "params_from_url": {
+        "slug": "category-([^/?#]+)"
+      },
+      "items_path": "data.products",
+      "item_fields": {
+        "id": "id"
+      },
+      "url_template": "https://www.digikala.com/product/dkp-{id}/",
+      "total_pages_path": "data.pager.total_pages",
+      "total_items_path": "data.pager.total_items",
+      "category_label_path": "data.category.title_fa",
+      "start_page": 1
+    },
+    "link_pattern": "/product/dkp-\\d+",
+    "pagination": {
+      "type": "param",
+      "param": "page",
+      "start": 1
+    }
+  },
+  "product": {
+    "mode": "api",
+    "api": {
+      "url": "https://api.digikala.com/v2/product/{id}/",
+      "params_from_url": {
+        "id": "dkp-(\\d+)"
+      }
+    },
+    "fallback_mode": "browser",
+    "capture_xhr": [
+      "api.digikala.com"
+    ],
+    "auto_expand": true,
+    "scroll": true
+  },
+  "request": {
+    "headers": {
+      "Accept": "application/json, text/plain, */*",
+      "Origin": "https://www.digikala.com",
+      "Referer": "https://www.digikala.com/"
+    },
+    "timeout_s": 40
+  },
+  "max_gallery": 12,
+  "fields": [
+    {
+      "key": "title",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.title_fa"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.title_fa"
+        }
+      ]
+    },
+    {
+      "key": "title_en",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.title_en"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.title_en"
+        }
+      ]
+    },
+    {
+      "key": "brand",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.brand.title_fa"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.brand.title_fa"
+        }
+      ]
+    },
+    {
+      "key": "brand_en",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.brand.title_en"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.brand.title_en"
+        }
+      ]
+    },
+    {
+      "key": "category",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.category.title_fa"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.category.title_fa"
+        }
+      ]
+    },
+    {
+      "key": "breadcrumb",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.breadcrumb[].title"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.breadcrumb[].title"
+        }
+      ]
+    },
+    {
+      "key": "short_description",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.expert_reviews.short_review"
+        },
+        {
+          "type": "api",
+          "path": "data.product.review.description"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.review.description"
+        }
+      ],
+      "transforms": [
+        "text"
+      ]
+    },
+    {
+      "key": "long_description",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.expert_reviews.review_sections[].sections[].text"
+        },
+        {
+          "type": "api",
+          "path": "data.product.expert_reviews.description"
+        },
+        {
+          "type": "api",
+          "path": "data.product.review.description"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.expert_reviews.description"
+        },
+        {
+          "type": "auto"
+        }
+      ],
+      "transforms": [
+        "text",
+        {
+          "type": "join",
+          "sep": "\n\n"
+        }
+      ]
+    },
+    {
+      "key": "specifications",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.specifications"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.specifications"
+        },
+        {
+          "type": "auto"
+        }
+      ],
+      "transforms": [
+        {
+          "type": "flatten"
+        },
+        {
+          "type": "specs_groups",
+          "group": "title",
+          "items": "attributes",
+          "name": "title",
+          "value": "values"
+        }
+      ]
+    },
+    {
+      "key": "featured_image",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.images.main.url[0]"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.images.main.url[0]"
+        }
+      ],
+      "transforms": [
+        "strip_query"
+      ]
+    },
+    {
+      "key": "gallery",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.images.list[].url[0]"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.images.list[].url[0]"
+        }
+      ],
+      "transforms": [
+        "strip_query",
+        "unique"
+      ]
+    },
+    {
+      "key": "variants",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.variants"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.variants"
+        }
+      ]
+    },
+    {
+      "key": "price",
+      "strategies": [
+        {
+          "type": "api",
+          "path": "data.product.default_variant.price.selling_price"
+        },
+        {
+          "type": "xhr",
+          "match": "/product/",
+          "path": "data.product.default_variant.price.selling_price"
+        }
+      ]
+    }
+  ]
+}

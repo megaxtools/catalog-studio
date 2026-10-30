@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>استودیو کاتالوگ مگا</title>
+  <link rel="preload" href="/static/fonts/IRANYekanXVF.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%234F39F6'/%3E%3Ctext x='16' y='22' font-size='17' font-family='Arial' font-weight='900' fill='white' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <div class="brand-mark">M</div>
+        <div><b>استودیو کاتالوگ مگا</b><span>Mega Catalog Studio</span></div>
+      </div>
+      <nav class="nav" id="nav"></nav>
+      <div class="side-foot" id="side-foot"></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="crumb" id="crumb"></div>
+          <h1 id="page-title">…</h1>
+        </div>
+        <div class="sp"></div>
+        <div class="btns" id="top-actions"></div>
+      </header>
+      <section class="view" id="view"><div class="card"><div class="card-b muted" id="boot-msg">در حال بارگذاری استودیو…</div></div></section>
+    </main>
+  </div>
+  <div class="toasts" id="toasts"></div>
+  <script type="module" src="/static/js/app.js"></script>
+  <script>
+    // اگر ماژول‌های رابط در بار اول کامل نرسیدند (مثلاً استودیو هنوز در حال آماده‌سازی بود)، صفحه خودکار دوباره بارگذاری می‌شود
+    (function () {
+      var tries = Number(sessionStorage.getItem('boot-tries') || 0);
+      setTimeout(function () {
+        if (window.__studioReady) { sessionStorage.removeItem('boot-tries'); return; }
+        var m = document.getElementById('boot-msg');
+        if (tries < 6) {
+          sessionStorage.setItem('boot-tries', String(tries + 1));
+          if (m) m.textContent = 'استودیو هنوز در حال آماده‌سازی است؛ دوباره تلاش می‌شود…';
+          location.reload();
+        } else if (m) {
+          m.innerHTML = 'رابط استودیو بارگذاری نشد. پنجره‌ی اجرای برنامه (run.bat) را بررسی کنید و سپس <a href="javascript:location.reload()">دوباره تلاش کنید</a>.';
+          sessionStorage.removeItem('boot-tries');
+        }
+      }, 12000);
+    })();
+  </script>
+</body>
+</html>

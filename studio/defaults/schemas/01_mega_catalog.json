@@ -1,0 +1,179 @@
+{
+  "name": "کاتالوگ مگا کارز (Mega Cars Catalog)",
+  "is_default": true,
+  "description": "ساختار استاندارد ورود محصول به کاتالوگ مگا کارز.",
+  "columns": [
+    {
+      "key": "title",
+      "label": "عنوان محصول",
+      "kind": "scraped",
+      "from": "title",
+      "input": "text",
+      "required": true
+    },
+    {
+      "key": "slug",
+      "label": "اسلاگ محصول",
+      "kind": "auto",
+      "generator": "slug",
+      "input": "text"
+    },
+    {
+      "key": "category_slug",
+      "label": "زیردسته‌ی محصول",
+      "kind": "mapping",
+      "map": "category",
+      "fallback": "auto",
+      "input": "text"
+    },
+    {
+      "key": "brand_slug",
+      "label": "برند محصول",
+      "kind": "mapping",
+      "map": "brand",
+      "fallback": "auto",
+      "input": "text"
+    },
+    {
+      "key": "status",
+      "label": "وضعیت انتشار",
+      "kind": "constant",
+      "value": "active",
+      "input": "text"
+    },
+    {
+      "key": "product_type",
+      "label": "نوع محصول",
+      "kind": "constant",
+      "value": "simple",
+      "input": "text"
+    },
+    {
+      "key": "requires_vehicle_at_booking",
+      "label": "اجباری بودن انتخاب خودرو",
+      "kind": "constant",
+      "value": "false",
+      "input": "bool"
+    },
+    {
+      "key": "short_description",
+      "label": "توضیح کوتاه",
+      "kind": "scraped",
+      "from": "short_description",
+      "input": "longtext"
+    },
+    {
+      "key": "long_description",
+      "label": "توضیح بلند",
+      "kind": "scraped",
+      "from": "long_description",
+      "input": "longtext"
+    },
+    {
+      "key": "vendor_notes",
+      "label": "توضیحات مربوط به کسب‌وکار",
+      "kind": "manual",
+      "input": "longtext"
+    },
+    {
+      "key": "user_dos_donts_description",
+      "label": "بایدها و نبایدهای مشتری",
+      "kind": "manual",
+      "input": "bullet_groups",
+      "export": "split",
+      "groups": [
+        {
+          "key": "dos",
+          "label": "بایدهای مشتری"
+        },
+        {
+          "key": "donts",
+          "label": "نبایدهای مشتری"
+        },
+        {
+          "key": "pre_post_purchase",
+          "label": "پیش و پس از خرید محصول"
+        }
+      ]
+    },
+    {
+      "key": "vendor_dos_donts_description",
+      "label": "بایدها و نبایدهای کسب‌وکار",
+      "kind": "manual",
+      "input": "bullet_groups",
+      "export": "split",
+      "groups": [
+        {
+          "key": "dos",
+          "label": "بایدهای کسب‌وکار"
+        },
+        {
+          "key": "donts",
+          "label": "نبایدهای کسب‌وکار"
+        },
+        {
+          "key": "shipping_returns",
+          "label": "ارسال و مرجوعی"
+        }
+      ]
+    },
+    {
+      "key": "dimensions",
+      "label": "ابعاد و وزن (گرم / سانتی‌متر)",
+      "kind": "scraped",
+      "from": "dimensions",
+      "input": "group",
+      "export": "json",
+      "subkeys": [
+        "item_weight",
+        "item_width",
+        "item_length",
+        "item_height",
+        "packaging_weight",
+        "packaging_width",
+        "packaging_length",
+        "packaging_height"
+      ]
+    },
+    {
+      "key": "dimension_codes",
+      "label": "متغیرهای محصول",
+      "kind": "scraped",
+      "from": "dimension_codes",
+      "input": "json",
+      "export": "json"
+    },
+    {
+      "key": "specifications",
+      "label": "مشخصات محصول",
+      "kind": "scraped",
+      "from": "specifications",
+      "input": "specs",
+      "export": "json",
+      "spec_format": "flat"
+    },
+    {
+      "key": "featured_images",
+      "label": "تصویر شاخص",
+      "kind": "scraped",
+      "from": "featured_image",
+      "input": "image",
+      "required": true
+    },
+    {
+      "key": "images_gallery",
+      "label": "تصاویر گالری",
+      "kind": "scraped",
+      "from": "gallery",
+      "input": "images",
+      "export": "comma"
+    },
+    {
+      "key": "source_url",
+      "label": "لینک منبع",
+      "kind": "auto",
+      "generator": "source_url",
+      "input": "text"
+    }
+  ]
+}
