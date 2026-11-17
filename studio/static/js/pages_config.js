@@ -474,18 +474,25 @@ function useLeaf(el) {
 // ======================================================================
 // اسکیماها
 // ======================================================================
+const SCF = { u: '' };
 export const Schemas = {
-  title: 'اسکیماهای داده',
-  crumb: 'ساختار ستون‌های خروجی: استخراجی، دستی، ثابت، نگاشت و خودکار',
+  title: 'اسکیماها',
+  crumb: 'الگوها و اسکیماها · ساختار ستون‌ها؛ هر اسکیما کاربرد مشخصی دارد: عمومی، استخراج، ویرایشگر یا کاتالوگ',
   top: () => `<button class="btn soft" data-act="aischema">${icon('sparkles')} ساخت اسکیما با AI</button><button class="btn primary" data-act="new">${icon('plus')} اسکیمای جدید</button>`,
   async render() {
-    const list = await api('/api/schemas');
+    const all = await api('/api/schemas');
+    const U = S.boot?.schema_usages || {};
+    const uf = SCF.u;
+    const list = uf ? all.filter((x) => (x.usage || 'general') === uf) : all;
     const kinds = (cols) => { const c = {}; cols.forEach((x) => { c[x.kind] = (c[x.kind] || 0) + 1; }); return c; };
-    const kl = { scraped: 'استخراجی', manual: 'دستی', constant: 'ثابت', mapping: 'نگاشت', auto: 'خودکار', ai: 'هوش مصنوعی' };
-    return `<div class="grid g2">${list.map((s) => {
+    const kl = { scraped: 'استخراجی', manual: 'دستی', constant: 'ثابت', mapping: 'نگاشت', auto: 'خودکار', ai: 'هوش مصنوعی', ref: 'مرجع' };
+    return `<div class="seg mb12">${[['', 'همه'], ...Object.entries(U)].map(([k, v]) => `<button class="${uf === k ? 'on' : ''}" data-act="uf" data-v="${k}">${esc(v)} ${fa(all.filter((x) => !k || (x.usage || 'general') === k).length)}</button>`).join('')}</div>
+      <div class="hint mb12"><b>عمومی:</b> همه‌جا قابل انتخاب · <b>استخراج:</b> برای بانک‌های داده‌ی خام · <b>ویرایشگر:</b> ستون‌هایی که در بانک تمیز ویرایش می‌شوند · <b>کاتالوگ:</b> برای فایل‌های خروجی در الگوهای خروجی.</div>
+      <div class="grid g2">${list.map((s) => {
       const k = kinds(s.columns);
       return `<div class="card src-card">
-        <div class="flex"><div class="src-logo">${icon('columns', 20)}</div><div class="grow"><b style="font-size:15px;color:var(--z-900)">${esc(s.name)}</b>${s.is_default ? ' <span class="tag p">پیش‌فرض</span>' : ''}<div class="xs muted">${esc(s.description || '')}</div></div></div>
+        <div class="flex"><div class="src-logo">${icon('columns', 20)}</div><div class="grow"><b style="font-size:15px;color:var(--z-900)">${esc(s.name)}</b>${s.is_default ? ' <span class="tag p">پیش‌فرض</span>' : ''} <span class="tag">${esc(s.usage_label || '')}</span><div class="xs muted">${esc(s.description || '')}</div></div></div>
+        <div class="xs muted">استفاده: ${fa(s.used?.datasets || 0)} بانک خام · ${fa(s.used?.banks || 0)} بانک تمیز${s.used?.templates?.length ? ` · الگوها: ${s.used.templates.map(esc).join('، ')}` : ''}</div>
         <div class="flex wrap">${Object.entries(k).map(([kk, n]) => `<span class="tag"><span class="kind-dot k-${kk}"></span>${kl[kk] || kk} ${fa(n)}</span>`).join('')}</div>
         <div class="ltr xs muted" style="text-align:left;line-height:1.9">${s.columns.map((c) => esc(c.key)).join(' · ')}</div>
         <div class="btns"><a class="btn sm soft" href="#/schemas/${s.id}">${icon('edit', 14)} ویرایش</a><button class="btn sm ghost" data-act="dup" data-id="${s.id}">${icon('copy', 14)} کپی</button>${list.length > 1 ? `<button class="btn sm ghost danger" data-act="del" data-id="${s.id}">${icon('trash', 14)}</button>` : ''}</div>
@@ -496,28 +503,34 @@ export const Schemas = {
     new: async () => { const s = await api('/api/schemas', { body: { name: 'اسکیمای جدید', columns: [{ key: 'title', label: 'عنوان', kind: 'scraped', from: 'title', input: 'text', required: true }, { key: 'source_url', label: 'لینک منبع', kind: 'auto', generator: 'source_url' }] } }); await refreshBoot(); go(`#/schemas/${s.id}`); },
     dup: async (el) => { const s = await api(`/api/schemas/${el.dataset.id}/duplicate`, { body: {} }); await refreshBoot(); go(`#/schemas/${s.id}`); },
     aischema: () => openAISchema(),
+    uf: async (el) => { SCF.u = el.dataset.v; document.getElementById('view').innerHTML = await Schemas.render(); },
     del: async (el) => { if (!(await confirmDlg('حذف اسکیما', 'این اسکیما حذف شود؟', 'حذف', true))) return; await api(`/api/schemas/${el.dataset.id}`, { method: 'DELETE' }); await refreshBoot(); location.reload(); },
   },
 };
 
 const SC = { s: null };
-const KINDS = [['scraped', 'استخراجی'], ['manual', 'دستی'], ['ai', 'هوش مصنوعی'], ['constant', 'ثابت'], ['mapping', 'نگاشت'], ['auto', 'خودکار']];
+const KINDS = [['scraped', 'استخراجی'], ['manual', 'دستی'], ['ai', 'هوش مصنوعی'], ['constant', 'ثابت'], ['mapping', 'نگاشت'], ['ref', 'مرجع (برند، دسته، خودرو)'], ['auto', 'خودکار']];
+const REFS = [['brand', 'برند (فهرست مرجع)'], ['category', 'دسته‌بندی (فهرست مرجع)'], ['vehicles', 'خودروهای سازگار']];
+const REF_FIELDS = [['slug', 'اسلاگ'], ['name', 'نام فارسی'], ['name_en', 'نام انگلیسی'], ['id', 'شناسه']];
+const VEH_FMT = [['structured', 'ساختاریافته (شیء JSON)'], ['slugs', 'مسیر اسلاگ‌ها'], ['names', 'نام فارسی'], ['names_en', 'نام انگلیسی'], ['expanded', 'همه‌ی تیپ‌های پوشش‌داده‌شده']];
 const SYS_GENS = ['source_url', 'source_name', 'dataset_code', 'scraped_at', 'product_key'];
 const AI_MODES_TXT = [['', 'خاموش'], ['fill_missing', 'اگر خالی بود'], ['rewrite', 'بازنویسی یکتا'], ['overwrite', 'همیشه از نو']];
 const AI_MODES_IMG = [['', 'خاموش'], ['fill_missing', 'اگر تصویری نیست'], ['add', 'افزودن به تصاویر'], ['overwrite', 'جایگزینی کامل']];
-const INPUTS = [['text', 'متن کوتاه'], ['longtext', 'متن بلند'], ['bullets', 'بولت'], ['bullet_groups', 'گروه بولت‌ها (چند ستون)'], ['group', 'گروه کلید/مقدار (مثل ابعاد)'], ['specs', 'مشخصات'], ['image', 'تصویر'], ['images', 'چند تصویر'], ['json', 'JSON'], ['bool', 'بله/خیر'], ['number', 'عدد']];
+const INPUTS = [['vehicles', 'خودروها'], ['text', 'متن کوتاه'], ['longtext', 'متن بلند'], ['bullets', 'بولت'], ['bullet_groups', 'گروه بولت‌ها (چند ستون)'], ['group', 'گروه کلید/مقدار (مثل ابعاد)'], ['specs', 'مشخصات'], ['image', 'تصویر'], ['images', 'چند تصویر'], ['json', 'JSON'], ['bool', 'بله/خیر'], ['number', 'عدد']];
 const GENS = [['slug', 'اسلاگ انگلیسی'], ['source_url', 'لینک صفحه‌ی محصول'], ['source_name', 'نام منبع'], ['dataset_code', 'شناسه‌ی بانک داده'], ['scraped_at', 'زمان استخراج'], ['product_key', 'شناسه‌ی محصول در منبع']];
 
 export const SchemaEditor = {
   title: 'ویرایش اسکیما',
   crumb: 'اسکیماهای داده',
-  top: () => `<a class="btn ghost" href="#/schemas">${icon('chevronRight', 16)} بازگشت</a><button class="btn primary" data-act="save">${icon('save', 16)} ذخیره‌ی اسکیما</button>`,
+  top: () => `<a class="btn ghost" href="#/schemas">${icon('chevronRight', 16)} بازگشت</a><button class="btn ghost" data-act="revs">${icon('branch', 16)} نسخه‌ها</button><button class="btn primary" data-act="save">${icon('save', 16)} ذخیره‌ی اسکیما</button>`,
   async render(p) {
     await refreshBoot();
     SC.s = await api(`/api/schemas/${p.id}`);
     return `<div class="card"><div class="card-b"><div class="form-grid">
         <div class="field"><label>نام اسکیما</label><input class="inp" id="sc-name" value="${attr(SC.s.name)}"></div>
         <div class="field"><label>توضیح</label><input class="inp" id="sc-desc" value="${attr(SC.s.description || '')}"></div>
+        <div class="field"><label>کاربرد</label><select class="inp" id="sc-usage">${Object.entries(S.boot?.schema_usages || {}).map(([k, v]) => `<option value="${k}" ${(SC.s.usage || 'general') === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+        <div class="field"><label>محل استفاده</label><div class="small" style="padding-top:8px">${fa(SC.s.used?.datasets || 0)} بانک خام · ${fa(SC.s.used?.banks || 0)} بانک تمیز${SC.s.used?.templates?.length ? ` · الگوها: ${SC.s.used.templates.map(esc).join('، ')}` : ''}</div></div>
         <label class="check"><input type="checkbox" id="sc-def" ${SC.s.is_default ? 'checked' : ''}> اسکیمای پیش‌فرض برای اجراها و خروجی‌های جدید</label>
       </div></div></div>
       <div class="card mt16"><div class="card-h"><h2>ستون‌ها</h2><span class="sub">ترتیب ستون‌ها همان ترتیب فایل خروجی است · <span class="kind-dot k-scraped"></span>استخراجی: از منبع اسکرپ می‌شود · <span class="kind-dot k-manual"></span>دستی: در استودیو وارد می‌شود · <span class="kind-dot k-constant"></span>ثابت: پیش‌ساخته · <span class="kind-dot k-ai"></span>هوش مصنوعی: تولید خودکار · ${icon('edit', 11)} پیش‌فرض: مقداری که خودتان یک بار برای همه‌ی محصولات می‌نویسید</span><span class="sp"></span><button class="btn sm soft" data-act="aicol">${icon('sparkles', 14)} ستون با AI</button><button class="btn sm soft" data-act="aimore">${icon('wand', 14)} تکمیل اسکیما با AI</button><button class="btn sm" data-act="addcol">${icon('plus', 14)} ستون</button></div>
@@ -534,6 +547,7 @@ export const SchemaEditor = {
         : c.kind === 'mapping' ? `<select class="inp sm" data-change="col" data-i="${i}" data-k="map"><option value="category" ${c.map === 'category' ? 'selected' : ''}>دسته‌بندی</option><option value="brand" ${c.map === 'brand' ? 'selected' : ''}>برند</option></select>`
         : c.kind === 'auto' ? `<select class="inp sm" data-change="col" data-i="${i}" data-k="generator">${GENS.map(([k, l]) => `<option value="${k}" ${c.generator === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`
         : c.kind === 'ai' ? `<span class="xs" style="color:var(--primary)">${icon('sparkles', 12)} مقدار با هوش مصنوعی ساخته می‌شود</span>`
+        : c.kind === 'ref' ? `<select class="inp sm" data-change="col" data-i="${i}" data-k="ref" data-redraw="1">${REFS.map(([k, l]) => `<option value="${k}" ${(c.ref || 'brand') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`
         : `<span class="xs muted">در استودیو وارد می‌شود</span>`;
       const exp = c.input === 'bullet_groups' ? [['split', 'هر گروه یک ستون'], ['json', 'یک ستون JSON'], ['split+json', 'هر دو']]
         : c.input === 'group' ? [['json', 'یک ستون JSON'], ['split', 'هر کلید یک ستون']]
@@ -554,6 +568,8 @@ export const SchemaEditor = {
           ${defaultChip(c, i)}
           ${exp ? `<span class="xs muted">قالب خروجی:</span><select class="inp sm" style="max-width:200px" data-change="col" data-i="${i}" data-k="export">${exp.map(([k, l]) => `<option value="${k}" ${(c.export || exp[0][0]) === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
           ${c.input === 'specs' ? `<span class="xs muted">قالب مشخصات:</span><select class="inp sm" style="max-width:240px" data-change="col" data-i="${i}" data-k="spec_format">${[['flat', 'شیء نام→مقدار'], ['grouped', 'گروه‌بندی‌شده'], ['list', 'فهرست کامل']].map(([k, l]) => `<option value="${k}" ${(c.spec_format || 'flat') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
+          ${c.kind === 'ref' && c.ref !== 'vehicles' ? `<span class="xs muted">مقدار خروجی:</span><select class="inp sm" style="max-width:150px" data-change="col" data-i="${i}" data-k="ref_field">${REF_FIELDS.map(([k, l]) => `<option value="${k}" ${(c.ref_field || 'slug') === k ? 'selected' : ''}>${l}</option>`).join('')}</select>` : ''}
+          ${(c.kind === 'ref' && c.ref === 'vehicles') || c.input === 'vehicles' ? `<span class="xs muted">قالب سازگاری:</span><select class="inp sm" style="max-width:230px" data-change="col" data-i="${i}" data-k="vehicle_format">${VEH_FMT.map(([k, l]) => `<option value="${k}" ${(c.vehicle_format || 'structured') === k ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="xs muted">اگر خودرو مشخص نشود: همه‌ی خودروها</span>` : ''}
           ${c.kind === 'mapping' ? `<span class="xs muted">اگر نگاشت نبود:</span><select class="inp sm" style="max-width:220px" data-change="col" data-i="${i}" data-k="fallback"><option value="auto" ${c.fallback !== 'empty' ? 'selected' : ''}>اسلاگ پیشنهادی خودکار</option><option value="empty" ${c.fallback === 'empty' ? 'selected' : ''}>خالی بماند</option></select>` : ''}
           ${c.input === 'bullet_groups' ? `<span class="xs muted">گروه‌ها (هر خط key: برچسب):</span><textarea class="inp sm mono" rows="3" style="max-width:420px;height:auto;padding:6px 10px" data-input="colgroups" data-i="${i}">${esc((c.groups || []).map((g) => `${g.key}: ${g.label}`).join('\n'))}</textarea>` : ''}
           ${c.input === 'group' ? `<span class="xs muted">کلیدها:</span><input class="inp sm mono" style="max-width:520px" data-input="colsubs" data-i="${i}" value="${attr((c.subkeys || []).join(', '))}">` : ''}
@@ -575,7 +591,10 @@ export const SchemaEditor = {
         if (c.kind === 'auto' && !c.generator) c.generator = 'slug';
         if (c.kind === 'mapping' && !c.map) c.map = 'category';
         if (c.kind === 'ai' && !c.ai_mode) c.ai_mode = 'fill_missing';
+        if (c.kind === 'ref' && !c.ref) c.ref = 'brand';
+        if (c.kind === 'ref' && c.ref === 'vehicles') c.input = 'vehicles';
       }
+      if (el.dataset.k === 'ref') { c.input = c.ref === 'vehicles' ? 'vehicles' : 'text'; }
       if (el.dataset.k === 'input' && c.input === 'bullet_groups' && !c.groups) c.groups = [{ key: 'dos', label: 'بایدها' }, { key: 'donts', label: 'نبایدها' }, { key: 'notes', label: 'نکات' }];
       if (el.dataset.k === 'input' && c.input === 'group' && !c.subkeys) c.subkeys = ['item_weight', 'item_width', 'item_length', 'item_height', 'packaging_weight', 'packaging_width', 'packaging_length', 'packaging_height'];
       if (el.dataset.redraw) SchemaEditor.draw();
@@ -605,6 +624,11 @@ export const SchemaEditor = {
         okToast(`${fa(r.columns.length)} ستون پیشنهادی افزوده شد؛ موارد ناخواسته را حذف و ذخیره کنید.`);
       } catch (e) { noProviderHint(e); } finally { busy(el, false); }
     },
+    revs: async () => {
+      const { revisionsPanel } = await import('./widgets.js');
+      const l = openLayer('modal', `<div class="card-h"><h3>${icon('branch', 18)} نسخه‌های اسکیما</h3><span class="sp"></span><button class="btn sm icon ghost" data-close>${icon('x', 16)}</button></div><div class="card-b" id="rv" style="max-height:72vh;overflow:auto"></div>`, { wide: true });
+      revisionsPanel(l.box.querySelector('#rv'), 'schema', SC.s.id, () => { l.close(); location.reload(); });
+    },
     addcol: () => { SC.s.columns.push({ key: `field_${SC.s.columns.length + 1}`, label: '', kind: 'manual', input: 'text' }); SchemaEditor.draw(); },
     coldef: async (el) => {
       const c = SC.s.columns[Number(el.dataset.i)];
@@ -627,7 +651,7 @@ export const SchemaEditor = {
     save: async () => {
       const keys = SC.s.columns.map((c) => c.key);
       if (new Set(keys).size !== keys.length) { toast('نام ستون‌ها باید یکتا باشد.', 'err'); return; }
-      await api(`/api/schemas/${SC.s.id}`, { method: 'PUT', body: { name: document.getElementById('sc-name').value, description: document.getElementById('sc-desc').value, is_default: document.getElementById('sc-def').checked, columns: SC.s.columns } });
+      await api(`/api/schemas/${SC.s.id}`, { method: 'PUT', body: { name: document.getElementById('sc-name').value, description: document.getElementById('sc-desc').value, is_default: document.getElementById('sc-def').checked, usage: document.getElementById('sc-usage').value, columns: SC.s.columns } });
       await refreshBoot();
       okToast('اسکیما ذخیره شد.');
     },

@@ -502,6 +502,8 @@ def _raw_value(col: dict, item: dict, ds: dict, settings: dict, src: dict | None
         if col.get("fallback", "auto") == "auto" and sv and not has_default:  # با مقدار پیش‌فرض، همان پیش‌فرض جای اسلاگ پیشنهادی می‌نشیند
             return slugify(sv, settings.get("slug_dictionary")), "unmapped"
         return "", "unmapped"
+    if kind == "ref":  # نسخه‌ی ۲: برند، دسته یا سازگاری با خودرو از داده‌های مرجع
+        return _ref_value(col, item, ds, data, settings)
     if kind == "auto":
         gen = col.get("generator", "slug")
         if gen == "slug":
@@ -522,6 +524,25 @@ def _raw_value(col: dict, item: dict, ds: dict, settings: dict, src: dict | None
         if gen == "product_key":
             return item.get("product_key", ""), ""
     return "", ""
+
+
+def _ref_value(col: dict, item: dict, ds: dict, data: dict, settings: dict) -> tuple:
+    """مقدار ستون «مرجع» برای محصول خام: برند/دسته از فهرست مرجع (از روی نگاشت یا نام)، سازگاری از تطبیق متن."""
+    from . import compat, refdata
+    ref = col.get("ref") or "brand"
+    if ref == "vehicles":
+        text = " ".join(str(data.get(k) or "") for k in ("title", "title_en", "short_description"))
+        text += " " + " ".join(f"{x.get('name', '')} {x.get('value', '')}" for x in (data.get("specifications") or []) if isinstance(x, dict))
+        sug = compat.suggest(text) if col.get("suggest", True) else {"value": {"all": True}}
+        return compat.export(sug["value"], col.get("vehicle_format") or "structured"), ""
+    sv = mapping_source_value(ref, {**item, "data": data}, ds)
+    m = lookup_mapping(ref, ds["source_id"], sv)
+    rid = refdata.resolve(ref, (m or {}).get("target_slug") or "", sv, data.get("brand_en") or "" if ref == "brand" else "")
+    r = refdata.get(ref, rid)
+    if not r:
+        return "", ("unmapped" if sv else ("missing" if col.get("required") else ""))
+    f = col.get("ref_field") or "slug"
+    return (r["id"] if f == "id" else r.get(f, r["slug"])), ""
 
 
 def specs_to_json(specs: list, fmt: str = "flat"):
@@ -599,6 +620,10 @@ def expand_column(col: dict, value, image_map: dict | None = None) -> list[tuple
         if exp == "lines":
             return [(key, "\n".join(lst))]
         return [(key, ",".join(lst))]
+    if inp == "vehicles":
+        if isinstance(value, dict):
+            return [(key, json.dumps(value, ensure_ascii=False))]
+        return [(key, "\n".join(str(x) for x in as_list(value)))]
     if inp == "json":
         if value in (None, "", [], {}):
             return [(key, "")]

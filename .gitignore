@@ -1,4 +1,22 @@
+# محیط پایتون
 .venv/
-data/
+venv/
 __pycache__/
 *.pyc
+*.pyo
+
+# داده‌ی محلی استودیو: دیتابیس، مدل‌های ONNX، خروجی‌ها و تصاویر
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# فایل‌های موقت و سیستمی
+*.log
+*.pid
+.env
+.DS_Store
+Thumbs.db
+desktop.ini
+node_modules/
+.playwright/

@@ -13,6 +13,13 @@ _lock = threading.RLock()
 _local = threading.local()
 
 SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    module TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    applied_at TEXT NOT NULL,
+    PRIMARY KEY (module, version)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

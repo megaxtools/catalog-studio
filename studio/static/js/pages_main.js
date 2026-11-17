@@ -144,7 +144,9 @@ const MODE_SWITCH = (ai) => `
     <div class="mode-switch mb16">
       <a class="pick ${ai ? '' : 'on'}" href="#/new"><div class="src-logo">${icon('globe', 20)}</div><div class="grow"><b>استخراج از سایت</b><div class="xs muted">لینک صفحه‌ی دسته‌بندی یک منبع را بدهید</div></div></a>
       <a class="pick ${ai ? 'on' : ''}" href="#/new/ai"><div class="src-logo" style="background:var(--primary);color:#fff">${icon('sparkles', 20)}</div><div class="grow"><b>تولید با هوش مصنوعی</b><div class="xs muted">بدون اسکرپ؛ فقط نوع محصول و تعداد</div></div></a>
+      <a class="pick" href="javascript:void 0" data-act="importraw"><div class="src-logo">${icon('upload', 20)}</div><div class="grow"><b>ورود از فایل</b><div class="xs muted">Excel، CSV یا JSON محصولات (با فایل نمونه)</div></div></a>
     </div>`;
+const importRaw = async () => (await import('./import_ui.js')).openImportDialog('raw');
 
 export const NewRun = {
   title: 'استخراج جدید',
@@ -277,6 +279,7 @@ export const NewRun = {
     if (el) el.textContent = `${s ? s.key : 'source'}__${/^[\x00-\x7F]+$/.test(seg) ? seg.toLowerCase() : 'category'}__Nitems__<تاریخ>_<ساعت>`;
   },
   act: {
+    importraw: () => importRaw(),
     aiCreate: (el) => aiCreate(el),
     aiEnqueue: (el) => aiEnqueue(el),
     aiSuggest: (el) => aiSuggestSpec(el),
@@ -463,9 +466,9 @@ function modeLabel(cfg) {
 // فهرست بانک‌های داده
 // ======================================================================
 export const Datasets = {
-  title: 'بانک‌های داده',
-  crumb: 'همه‌ی اجراهای استخراج و تولید',
-  top: () => `<a class="btn soft" href="#/new/ai">${icon('sparkles')} تولید با هوش مصنوعی</a><a class="btn primary" href="#/new">${icon('plus')} استخراج جدید</a>`,
+  title: 'بانک‌های داده‌ی خام',
+  crumb: 'داده‌های خام · همه‌ی اجراهای استخراج و تولید؛ برای تمیز کردن، از هر بانک یک «بانک تمیز» بسازید',
+  top: () => `<button class="btn" data-act="importraw">${icon('upload')} ورود از فایل</button><a class="btn soft" href="#/new/ai">${icon('sparkles')} تولید با هوش مصنوعی</a><a class="btn primary" href="#/new">${icon('plus')} استخراج جدید</a>`,
   async render() {
     const list = await api('/api/datasets');
     if (!list.length) return `<div class="card">${emptyState('database', 'هنوز بانک داده‌ای ندارید', 'با یک لینک صفحه‌ی دسته‌بندی، اولین بانک داده را بسازید.', `<a class="btn primary" href="#/new">${icon('plus')} استخراج جدید</a>`)}</div>`;
@@ -491,6 +494,7 @@ export const Datasets = {
     });
   },
   act: {
+    importraw: () => importRaw(),
     open: (el, ev) => { if (ev.target.closest('button')) return; go(`#/datasets/${el.dataset.id}`); },
     ctl: async (el, ev) => { ev.stopPropagation(); await api(`/api/datasets/${el.dataset.id}/do/${el.dataset.do}`, { body: {} }); },
   },
@@ -502,8 +506,9 @@ export const Datasets = {
 const IT = { tab: 'items', page: 1, status: '', q: '', sel: new Set(), lastLog: 0, ds: null, items: null };
 
 export const Dataset = {
-  title: 'بانک داده',
-  crumb: 'جزئیات اجرا و محصولات',
+  title: 'بانک داده‌ی خام',
+  crumb: 'داده‌های خام · جزئیات اجرا و محصولات (نسخه‌ی صفر؛ ویرایش اصلی در «ویرایشگر داده‌ها»)',
+  top: (p) => `<button class="btn primary" data-act="tobank" data-id="${p.id}">${icon('inbox', 16)} ساخت بانک تمیز از این داده</button>`,
   async render(p) {
     IT.tab = 'items'; IT.page = 1; IT.status = ''; IT.q = ''; IT.sel = new Set(); IT.lastLog = 0;
     const d = await api(`/api/datasets/${p.id}`);
@@ -738,6 +743,7 @@ export const Dataset = {
     </div>`;
   },
   act: {
+    tobank: async (el) => { const m = await import('./pages_editor.js'); m.openNewBank([Number(el.dataset.id)]); },
     tab: (el) => { IT.tab = el.dataset.tab; Dataset.renderTab(); },
     ctl: async (el) => {
       if (el.dataset.do === 'stop' && !(await confirmDlg('پایان اجرا', 'اجرا متوقف می‌شود و وضعیتش «پایان‌یافته» ثبت می‌شود. بعداً هم می‌توانید از همین نقطه ادامه دهید.', 'پایان اجرا'))) return;
@@ -942,6 +948,7 @@ export function colInput(col, v, it) {
     const lbl = { item_weight: 'وزن محصول (گرم)', item_width: 'عرض محصول', item_length: 'طول محصول', item_height: 'ارتفاع محصول', packaging_weight: 'وزن بسته (گرم)', packaging_width: 'عرض بسته', packaging_length: 'طول بسته', packaging_height: 'ارتفاع بسته' };
     return `<div class="dims-grid">${(col.subkeys || []).map((s) => `<div class="field"><span class="xs">${esc(lbl[s] || s)}</span><input class="inp sm ltr" data-sub="${attr(s)}" value="${attr(val[s] ?? '')}" inputmode="decimal"></div>`).join('')}</div><div class="hint">وزن به گرم و ابعاد به سانتی‌متر. موارد خالی را می‌توانید دستی تکمیل کنید.</div>`;
   }
+  if (inp === 'vehicles') return `<textarea class="inp mono" rows="3" data-json readonly title="سازگاری با خودرو در «ویرایشگر داده‌ها» انتخاب می‌شود">${esc(v ? JSON.stringify(v, null, 2) : '')}</textarea><div class="hint">پیشنهاد خودکار از متن محصول؛ انتخاب نهایی در ویرایشگر داده‌ها.</div>`;
   if (inp === 'specs') return `<textarea class="inp mono" rows="6" data-json>${esc(v ? JSON.stringify(v, null, 2) : '')}</textarea><div class="hint">فهرست مشخصات به‌شکل JSON؛ هر ردیف شامل group، name و value.</div>`;
   if (inp === 'json') return `<textarea class="inp mono" rows="3" data-json>${esc(v === undefined || v === null || v === '' ? '' : JSON.stringify(v, null, 2))}</textarea>`;
   if (inp === 'images') return `<textarea class="inp mono" rows="4" data-lines>${esc(toLines(v))}</textarea><div class="hint">هر خط، لینک یک تصویر گالری.</div>`;

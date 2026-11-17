@@ -285,7 +285,7 @@ def T(_tool, **a):
 
 need = {"list_catalogs", "get_catalog", "get_catalog_rows", "update_catalog_row", "bulk_edit_catalog", "catalog_image_action", "catalog_ai",
         "update_catalog", "rebuild_catalog_files", "sync_catalog_to_datasets", "delete_catalog", "get_activity", "get_ai_calls", "get_history", "revert_history"}
-ok(need <= set(mcp_core.TOOLS) and mcp_core.SERVER_VERSION == "1.6.1", f"{len(mcp_core.TOOLS)} ابزار MCP")
+ok(need <= set(mcp_core.TOOLS) and mcp_core.SERVER_VERSION.startswith("2."), f"{len(mcp_core.TOOLS)} ابزار MCP")
 mc = T("list_catalogs")
 ok(any(x["id"] == ex["id"] for x in mc), "list_catalogs")
 gc = T("get_catalog", catalog_id=ex["id"])

@@ -19,7 +19,7 @@ from urllib.parse import quote
 import requests
 
 SERVER_NAME = "mega-catalog-studio"
-SERVER_VERSION = "1.6.1"
+SERVER_VERSION = "2.1.0"
 PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"]
 MAX_TEXT = 90_000
 
@@ -64,6 +64,33 @@ Typical workflows:
 - Studio AI assistant for anything else: ai_assist(task, payload) — task "text" (any value), "field" (one product column),
   "schema" (design a schema), "column" (design one column), "mappings" (brand/category slugs), "rules" (text-cleanup rules),
   "source_fields" (scraper strategies from a live-test explorer).
+VERSION 2 PIPELINE (preferred for anything that ends up on Mega Cars):
+raw datasets (immutable scrape data, the tools above) → CLEAN BANKS in the data editor → PRODUCT CATALOGS with versioned releases.
+- Start with v2_overview. Clean banks: list_banks / create_bank(dataset_ids) / get_bank. Products: list_products(bank_id, filter=nobrand|
+  nocategory|noimage|compat_auto|lowq|warn, status=review) → get_product (+ get_product_images) → update_product. Every change is a
+  revision (list_revisions / compare_revisions / restore_revision); raw data is never modified.
+- Brand and category must come from the reference lists (list_reference, save_reference); link source spellings with unmatched_reference +
+  link_reference. Never invent slugs that are not in the list — add the item to the list first.
+- Vehicle compatibility is mandatory and defaults to {"all": true}. Values come ONLY from the vehicles bank: search_vehicles / vehicle_tree,
+  then update_product(compat={"all": false, "items": [{"t": "brand|model|trim", "id": N}]}). A brand covers all its models, a model all
+  its trims. suggest_compatibility proposes a value (ai=true uses the studio's AI) — check it before saving. If a product is truly universal
+  keep {"all": true}.
+- Images: product_image_action (url, upload, generate, delete, make_feature, move, edit with a recipe {rotate, flip_h, flip_v, crop, adjust
+  {hue, saturation, brightness, contrast}, bg, erase}, reset_edit, rembg on/off, reprocess). Edits are non-destructive.
+- Many products at once: bulk_update_products (set, find_replace, prepend/append, apply_default, brand, category, compat, status).
+  AI: product_ai (one product) or bank_ai (background job).
+- Quality gate: product_quality; status "approved" is refused while there are quality errors. Duplicates: find_duplicates →
+  merge_duplicates / dismiss_duplicate. Workflow: draft → review → approved (or rejected).
+- Catalogs: list_output_templates / get_output_template / save_output_template (file tree: which files, formats, schemas, image paths) →
+  save_product_catalog(template_id, selection) → preview_catalog_selection → build_release(wait=true) → get_release / compare_releases.
+  Releases are immutable and carry a diff against the previous one.
+- Modules can be switched off by the admin (list_modules); tools of a disabled module are hidden. create_backup before risky bulk work.
+- Brands/categories: category_tree; each brand has category_ids = categories it is shown in (also in their parents and children) —
+  brands_in_category. Bulk changes with bulk_reference; export_reference; files with import_reference_file (see import_format).
+  Studio AI proposals (never auto-saved): ai_complete_reference, ai_match_reference, ai_generate_reference → review → apply_reference.
+- Product files: import_format(kind="raw") then import_dataset_file(analyze=true) to check header mapping, then import_dataset_file(mapping=…)
+  → create_bank. ai_design_template designs an output template; ai_check_duplicate judges a duplicate pair.
+The v1 export/catalog tools (create_export, list_catalogs, …) still work for old data; bank_from_legacy_export moves a v1 export into v2.
 Content language is Persian. Call every shop/garage «کسب‌وکار» and never use the word «شعبه». Do not mention prices or competitor stores.
 """
 
@@ -149,10 +176,11 @@ TOOLS: dict[str, dict] = {}
 
 
 def tool(name: str, description: str, props: dict | None = None, required: list | None = None,
-         write: bool = False, destructive: bool = False, title: str = ""):
+         write: bool = False, destructive: bool = False, title: str = "", module: str | None = None):
+    """module: شناسه‌ی ماژول استودیو؛ اگر آن ماژول خاموش باشد ابزار فهرست نمی‌شود و اجرا نمی‌شود."""
     def deco(fn: Callable):
         TOOLS[name] = {
-            "fn": fn, "write": write or destructive,
+            "fn": fn, "write": write or destructive, "module": module,
             "spec": {
                 "name": name, "title": title or name.replace("_", " ").title(), "description": description,
                 "inputSchema": {"type": "object", "properties": props or {}, "required": required or [], "additionalProperties": False},
@@ -1118,6 +1146,10 @@ def _ai_regen(api, a):
     return {k: r.get(k) for k in ("id", "status", "error")} if isinstance(r, dict) else r
 
 
+# ابزارهای نسخه‌ی ۲ (ویرایشگر داده‌ها، کاتالوگ محصولات، خودروها، ریویژن‌ها، …)
+from . import mcp_v2  # noqa: E402,F401
+
+
 # ---------------------------------------------------------------------------
 # منابع و پرامپت‌های MCP
 # ---------------------------------------------------------------------------
@@ -1223,18 +1255,39 @@ class Server:
     def __init__(self, api: StudioAPI, read_only: bool | Callable[[], bool] = False):
         self.api = api
         self._ro = read_only
+        self._mods: dict | None = None
+        self._mods_at = 0.0
 
     @property
     def read_only(self) -> bool:
         return self._ro() if callable(self._ro) else bool(self._ro)
 
+    def _modules(self) -> dict:
+        """وضعیت ماژول‌های استودیو (چند ثانیه کش می‌شود). اگر استودیو در دسترس نبود، همه روشن فرض می‌شوند."""
+        now = time.time()
+        if self._mods is None or now - self._mods_at > 5:
+            try:
+                self._mods = (self.api.get("/api/overview") or {}).get("modules") or {}
+            except Exception:  # noqa: BLE001
+                self._mods = {}
+            self._mods_at = now
+        return self._mods
+
+    def _available(self, t: dict) -> bool:
+        if self.read_only and t["write"]:
+            return False
+        return not t.get("module") or self._modules().get(t["module"], True)
+
     def tools(self) -> list[dict]:
-        return [t["spec"] for t in TOOLS.values() if not (self.read_only and t["write"])]
+        return [t["spec"] for t in TOOLS.values() if self._available(t)]
 
     def call_tool(self, name: str, args: dict) -> dict:
         t = TOOLS.get(name)
-        if not t or (self.read_only and t["write"]):
-            return {"content": [{"type": "text", "text": f"Unknown or disabled tool: {name}"}], "isError": True}
+        if t and t.get("module"):
+            self._mods_at = 0  # وضعیت تازه‌ی ماژول‌ها
+        if not t or not self._available(t):
+            why = f" (ماژول «{t['module']}» در استودیو خاموش است)" if t and t.get("module") and not (self.read_only and t["write"]) else ""
+            return {"content": [{"type": "text", "text": f"Unknown or disabled tool: {name}{why}"}], "isError": True}
         try:
             res = t["fn"](self.api, args or {})
         except ToolError as exc:

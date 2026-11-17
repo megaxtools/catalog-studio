@@ -28,11 +28,9 @@ from .export import EXPORTS
 from . import ai as ai_mod, ai_gen, ai_studio, rules as rules_mod, jobqueue, agent_ops, mcp_core, mcp_setup, mcp_http
 from . import align as align_mod
 from . import catalogs
+from .web import actor_of, pid, route, routes
 from PIL import Image
 from .images import BG_JOBS, MODELS, default_bg_output, download_model, download_state, model_status, rembg_available
-
-routes: list = []
-
 
 class _NoCacheStatic(StaticFiles):
     """پس از به‌روزرسانی نسخه، مرورگر فایل‌های قدیمی رابط را از حافظه‌ی نهان نخواند."""
@@ -43,38 +41,13 @@ class _NoCacheStatic(StaticFiles):
         return r
 
 
-def route(path: str, methods=("GET",)):
-    def deco(fn):
-        async def endpoint(request: Request):
-            try:
-                body = {}
-                if request.method in ("POST", "PUT", "PATCH", "DELETE"):
-                    raw = await request.body()
-                    body = json.loads(raw) if raw else {}
-                res = await fn(request, body)
-                if isinstance(res, Response):
-                    return res
-                return JSONResponse(res)
-            except ValueError as exc:
-                return JSONResponse({"error": str(exc)}, status_code=400)
-            except Exception as exc:  # noqa: BLE001
-                traceback.print_exc()
-                return JSONResponse({"error": f"{type(exc).__name__}: {exc}"}, status_code=500)
-        routes.append(Route(path, endpoint, methods=list(methods)))
-        return fn
-    return deco
-
-
-def pid(request: Request, name: str = "id") -> int:
-    return int(request.path_params[name])
-
-
 # ---------------------------------------------------------------------------
 # عمومی
 # ---------------------------------------------------------------------------
 
 @route("/api/bootstrap")
 async def bootstrap(request, body):
+    from . import modules as _modules
     sources = services.list_sources()
     return {
         "app": {"name": APP_NAME, "name_en": APP_NAME_EN, "version": VERSION, "data_dir": str(DATA_DIR)},
@@ -89,6 +62,9 @@ async def bootstrap(request, body):
         "ai_profiles": [{"id": p["id"], "name": p["name"]} for p in ai_gen.list_profiles()],
         "ai_providers": db.val("SELECT COUNT(*) FROM ai_providers"),
         "ai_modes": ai_gen.MODES,
+        "modules": _modules.enabled_map(),
+        "user": db.q1("SELECT id, name, role FROM users WHERE id=?", [int(db.get_settings().get("current_user_id") or 1)]),
+        "schema_usages": SCHEMA_USAGES,
     }
 
 
@@ -117,10 +93,6 @@ async def summary(request, body):
                   "active": db.q1("SELECT id, title, status FROM queue_jobs WHERE status IN ('running','ai_running') LIMIT 1")},
         "ai_running": db.val("SELECT COUNT(*) FROM ai_jobs WHERE status IN ('running','pending')"),
     }
-
-
-def actor_of(request) -> str:
-    return request.headers.get("x-studio-client") or "api"
 
 
 @route("/api/health")
@@ -338,39 +310,88 @@ async def explore_page(request, body):
 # اسکیماها
 # ---------------------------------------------------------------------------
 
+SCHEMA_USAGES = {"general": "عمومی (همه‌جا)", "extract": "استخراج و داده‌ی خام", "edit": "ویرایشگر داده‌ها", "catalog": "کاتالوگ و خروجی"}
+
+
+def _schema_usage(sid: int) -> dict:
+    tpls = [t["name"] for t in db.q("SELECT name, config FROM tpl_outputs") if any(int(o.get("schema_id") or 0) == sid for o in (db.jload(t["config"], {}) or {}).get("outputs", []))]
+    return {"datasets": db.val("SELECT COUNT(*) FROM datasets WHERE schema_id=?", [sid]) or 0,
+            "banks": db.val("SELECT COUNT(*) FROM wb_banks WHERE schema_id=?", [sid]) or 0, "templates": tpls}
+
+
+def _schema_out(sid: int) -> dict:
+    s = services.get_schema(sid)
+    if s:
+        s["used"] = _schema_usage(sid)
+        s["usage_label"] = SCHEMA_USAGES.get(s.get("usage") or "general", s.get("usage"))
+    return s
+
+
+def _schema_rev(sid: int, actor: str, action: str):
+    from . import revisions
+    s = services.get_schema(sid)
+    if s:
+        revisions.record("schema", sid, {k: s.get(k) for k in ("name", "description", "usage", "columns", "is_default")}, actor=actor, action=action)
+
+
 @route("/api/schemas", methods=("GET", "POST"))
 async def schemas_ep(request, body):
     if request.method == "POST":
-        sid = db.ex("INSERT INTO schemas(name, description, columns, is_default, created_at, updated_at) VALUES(?,?,?,?,?,?)",
-                    [body.get("name") or "اسکیمای جدید", body.get("description", ""), db.jdump(body.get("columns", [])), 0, db.now(), db.now()])
-        return services.get_schema(sid)
-    return services.list_schemas()
+        usage = body.get("usage") if body.get("usage") in SCHEMA_USAGES else "general"
+        sid = db.ex("INSERT INTO schemas(name, description, columns, is_default, usage, created_at, updated_at) VALUES(?,?,?,?,?,?,?)",
+                    [body.get("name") or "اسکیمای جدید", body.get("description", ""), db.jdump(body.get("columns", [])), 0, usage, db.now(), db.now()])
+        _schema_rev(sid, actor_of(request), "create")
+        return _schema_out(sid)
+    rows = services.list_schemas()
+    for s in rows:
+        s["used"] = _schema_usage(s["id"])
+        s["usage_label"] = SCHEMA_USAGES.get(s.get("usage") or "general", s.get("usage"))
+    u = request.query_params.get("usage")
+    if u:
+        rows = [s for s in rows if (s.get("usage") or "general") in (u, "general")]
+    return rows
+
+
+@route("/api/schemas/usages")
+async def schema_usages(request, body):
+    return SCHEMA_USAGES
 
 
 @route("/api/schemas/{id:int}", methods=("GET", "PUT", "DELETE"))
 async def schema_ep(request, body):
     sid = pid(request)
     if request.method == "PUT":
+        cur = services.get_schema(sid)
+        if not cur:
+            raise ValueError("اسکیما پیدا نشد.")
         if body.get("is_default"):
             db.ex("UPDATE schemas SET is_default=0")
-        db.ex("UPDATE schemas SET name=?, description=?, columns=?, is_default=?, updated_at=? WHERE id=?",
-              [body.get("name"), body.get("description", ""), db.jdump(body.get("columns", [])), 1 if body.get("is_default") else 0, db.now(), sid])
-        return services.get_schema(sid)
+        usage = body.get("usage") if body.get("usage") in SCHEMA_USAGES else (cur.get("usage") or "general")
+        db.ex("UPDATE schemas SET name=?, description=?, columns=?, is_default=?, usage=?, updated_at=? WHERE id=?",
+              [body.get("name") or cur["name"], body.get("description", ""), db.jdump(body.get("columns", cur["columns"])),
+               1 if body.get("is_default") else 0, usage, db.now(), sid])
+        _schema_rev(sid, actor_of(request), "edit")
+        return _schema_out(sid)
     if request.method == "DELETE":
         if db.val("SELECT COUNT(*) FROM schemas") <= 1:
             raise ValueError("دست‌کم یک اسکیما باید باقی بماند.")
+        used = _schema_usage(sid)
+        if used["banks"] or used["templates"]:
+            raise ValueError("این اسکیما در بانک‌های تمیز یا الگوهای خروجی استفاده شده است؛ اول آن‌ها را عوض کنید.")
+        _schema_rev(sid, actor_of(request), "delete")
         db.ex("UPDATE datasets SET schema_id=NULL WHERE schema_id=?", [sid])
         db.ex("DELETE FROM schemas WHERE id=?", [sid])
         return {"ok": True}
-    return services.get_schema(sid)
+    return _schema_out(sid)
 
 
 @route("/api/schemas/{id:int}/duplicate", methods=("POST",))
 async def schema_dup(request, body):
     s = services.get_schema(pid(request))
-    nid = db.ex("INSERT INTO schemas(name, description, columns, is_default, created_at, updated_at) VALUES(?,?,?,?,?,?)",
-                [s["name"] + " (کپی)", s["description"], db.jdump(s["columns"]), 0, db.now(), db.now()])
-    return services.get_schema(nid)
+    nid = db.ex("INSERT INTO schemas(name, description, columns, is_default, usage, created_at, updated_at) VALUES(?,?,?,?,?,?,?)",
+                [s["name"] + " (کپی)", s["description"], db.jdump(s["columns"]), 0, s.get("usage") or "general", db.now(), db.now()])
+    _schema_rev(nid, actor_of(request), "create")
+    return _schema_out(nid)
 
 
 # ---------------------------------------------------------------------------
@@ -1584,8 +1605,16 @@ async def index(request):
 
 
 def create_app() -> Starlette:
+    from . import backup, modules, workbench, product_catalog
+    backup.apply_pending()
     db.init()
     services.seed_defaults()
+    modules.load_all()
+    from . import api_v2  # noqa: F401 — ثبت مسیرهای نسخه‌ی ۲
+    workbench.BANK_JOBS.recover()
+    product_catalog.RELEASES.recover()
+    import threading
+    threading.Thread(target=backup.auto_daily, daemon=True).start()
     rules_mod.seed()
     ai_gen.seed()
     MANAGER.recover()

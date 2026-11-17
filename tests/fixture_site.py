@@ -200,9 +200,56 @@ def _mk(keys, i):
     return o
 
 
+def _mock_task(task: str, prompt: str):
+    """پاسخ ساختگی کارهای هوش مصنوعی نسخه‌ی ۲.۱ (ai_tasks)."""
+    inp = _re.search(r"^INPUT: (.+)$", prompt, _re.M)
+    data = json.loads(inp.group(1)) if inp else []
+    cats = _re.findall(r"^([a-z0-9-]+) = ", prompt, _re.M)
+    if task == "ref_complete":
+        return {"items": [{"i": x["i"], "name_en": f"Mock {x['i']}", "slug": f"mock-ref-{x['i']}", "aliases": [f"{x['name']} اصلی"],
+                           "description": f"توضیح آزمایشی {x['name']}", "categories": cats[:1], "parent": cats[0] if cats else "", "country": "ایران"}
+                          for x in data]}
+    if task == "ref_match":
+        ids = _re.findall(r"^(\d+) = ", prompt, _re.M)
+        out = []
+        for k, raw in enumerate(data):
+            out.append({"raw": raw, "id": int(ids[0]), "reason": "املای دیگر"} if (k == 0 and ids) else
+                       {"raw": raw, "id": None, "name": raw, "name_en": f"New Brand {k}", "slug": f"new-brand-{k}", "reason": "برند تازه"})
+        return {"items": out}
+    if task == "ref_generate":
+        if '"categories"' in prompt:
+            return {"items": [{"name": "لیکومولی", "name_en": "Liqui Moly", "slug": "liqui-moly", "aliases": ["LIQUI MOLY"], "country": "آلمان", "categories": cats[:1]},
+                              {"name": "توتال", "name_en": "Total", "slug": "total", "aliases": [], "country": "فرانسه", "categories": cats[:1]}]}
+        return {"items": [{"name": "لوازم برقی", "name_en": "Electrical", "slug": "electrical", "parent": ""},
+                          {"name": "باتری خودرو", "name_en": "Car Battery", "slug": "car-battery", "parent": "electrical"},
+                          {"name": "شمع خودرو", "name_en": "Spark Plug", "slug": "spark-plug-ai", "parent": "electrical"}]}
+    if task == "template_design":
+        sid = int((_re.search(r"^(\d+) = ", prompt, _re.M) or [0, 1])[1])
+        return {"name": "الگوی هوشمند", "description": "تصاویر و عنوان", "config": {
+            "root": "{catalog}-r{release}", "images": {"enabled": True, "path": "img/{slug}/{name}.{ext}"},
+            "outputs": [{"name": "محصولات", "kind": "products", "format": "json", "schema_id": sid, "path": "items/{slug}.json"},
+                        {"name": "برندها", "kind": "brands", "format": "xlsx", "path": "brands.xlsx"}]}}
+    if task == "dupe_check":
+        return {"same": True, "confidence": 90, "reason": "عنوان و برند یکسان است", "keep": "a"}
+    if task == "column_map":
+        heads = json.loads(_re.search(r"سرستون‌ها: (\[.*?\])\n", prompt).group(1))
+        guess = {"نام کالا": "title", "مارک": "brand", "عکس": "featured_image", "گروه": "category"}
+        return {"mapping": {h: guess.get(h, "") for h in heads}}
+    return {}
+
+
 def mock_answer(prompt: str) -> str:
     if "single word: OK" in prompt:
         return "OK"
+    mt = _re.match(r"TASK: (\w+)", prompt)
+    if mt:
+        return json.dumps(_mock_task(mt.group(1), prompt), ensure_ascii=False)
+    if "{id: english_name}" in prompt:  # نام انگلیسی خودروها
+        ids = _re.findall(r"^(\d+): (.+)$", prompt, _re.M)
+        return json.dumps({i: f"Mock English {i}" for i, _ in ids})
+    if "map automotive product text to vehicles" in prompt:  # سازگاری با خودرو
+        cands = _re.findall(r"^(brand|model|trim):(\d+) = ", prompt, _re.M)
+        return json.dumps({"all": False, "items": [{"t": t, "id": int(i)} for t, i in cands[-1:]]} if cands else {"all": True})
     m = _re.search(r"- عنوان: (.+)", prompt)
     title = m.group(1).strip() if m else "محصول"
     out = {}
@@ -275,6 +322,9 @@ def ai_post(h, p, body):
         user = msgs[-1]["content"]
         if isinstance(user, list):
             user = " ".join(x.get("text", "") for x in user if isinstance(x, dict))
+        sysm = " ".join(m.get("content", "") for m in msgs[:-1] if isinstance(m.get("content"), str))
+        if "{id: english_name}" in sysm or "map automotive product text to vehicles" in sysm:
+            user = sysm + "\n" + user
         return h.send(json.dumps({"choices": [{"message": {"content": mock_answer(user)}}], "usage": {"total_tokens": 321}}, ensure_ascii=False), "application/json")
     if p.endswith("/images/generations") or p.endswith("/images/edits"):
         AI_CALLS["image"] += 1
