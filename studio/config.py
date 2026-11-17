@@ -6,7 +6,7 @@ from pathlib import Path
 
 APP_NAME = "استودیو کاتالوگ مگا"
 APP_NAME_EN = "Mega Catalog Studio"
-VERSION = "1.6.1"
+VERSION = "2.1.0"
 
 PKG_DIR = Path(__file__).resolve().parent
 ROOT_DIR = PKG_DIR.parent
@@ -19,6 +19,9 @@ MODELS_DIR = DATA_DIR / "models"
 SCREENSHOTS_DIR = DATA_DIR / "screenshots"
 AI_IMAGES_DIR = DATA_DIR / "ai_images"
 DEFAULT_OUTPUT_DIR = DATA_DIR / "output"
+WORKBENCH_DIR = DATA_DIR / "workbench"     # فایل‌های محصولات تمیز (تصاویر خام، میانی، ویرایش‌شده و نهایی)
+BACKUP_DIR = DATA_DIR / "backups"
+DOCS_DIR = ROOT_DIR / "docs"
 
 HOST = os.environ.get("CATALOG_STUDIO_HOST", "127.0.0.1")
 PORT = int(os.environ.get("CATALOG_STUDIO_PORT", "8765"))
@@ -50,9 +53,17 @@ DEFAULT_SETTINGS: dict = {
     "ai_default_provider_id": None,     # اتصال پیش‌فرض دستیار هوش مصنوعی
     "ai_default_model": "",             # مدل پیش‌فرض (خالی = مدل متن اتصال)
     "ai_default_image_provider_id": None,  # اتصال پیش‌فرض تولید تصویر
+    # --- نسخه‌ی ۲ ---
+    "modules": {},                      # {شناسه‌ی ماژول: روشن/خاموش}
+    "quality": {"min_score": 70, "min_image_px": 800, "min_long_chars": 150, "title_min": 10, "title_max": 120,
+                "forbidden": ["شعبه", "تومان", "ریال", "قیمت"]},
+    "backup_auto": True,                # پشتیبان خودکار روزانه هنگام شروع
+    "backup_keep": 10,                  # تعداد پشتیبان‌های نگه‌داشته‌شده
+    "tour_done": False,                 # تور آشنایی دیده شده است
+    "current_user_id": 1,               # فعلاً فقط مدیر
 }
 
-for d in (DATA_DIR, MODELS_DIR, SCREENSHOTS_DIR, AI_IMAGES_DIR):
+for d in (DATA_DIR, MODELS_DIR, SCREENSHOTS_DIR, AI_IMAGES_DIR, WORKBENCH_DIR, BACKUP_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 # rembg مدل‌ها را از این مسیر می‌خواند؛ موتور داخلی هم از همین مسیر استفاده می‌کند.

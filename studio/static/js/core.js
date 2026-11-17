@@ -107,6 +107,7 @@ export function openLayer(kind, html, opts = {}) {
   return layer;
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && layerStack.length) layerStack[layerStack.length - 1].close(); });
+export function closeLayers() { [...layerStack].reverse().forEach((l) => l.close()); }
 
 export function confirmDlg(title, body, okText = 'تأیید', danger = false) {
   return new Promise((resolve) => {

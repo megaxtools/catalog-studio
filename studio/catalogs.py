@@ -180,6 +180,8 @@ def structured(col: dict, v):
         return {s: _num(d.get(s, "")) if str(d.get(s, "")).strip() else None for s in col.get("subkeys", [])}
     if inp == "specs":
         return services.specs_to_json(v, col.get("spec_format", "flat")) if v else ([] if col.get("spec_format") == "list" else {})
+    if inp == "vehicles":
+        return v
     if inp in ("bullets", "images"):
         return [x for x in services.as_list(v) if x not in (None, "")]
     if inp == "bool":

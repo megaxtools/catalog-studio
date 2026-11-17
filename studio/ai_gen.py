@@ -561,7 +561,7 @@ class AIJobs:
         if opts.get("config"):
             prof = {"name": opts.get("title") or "تولید سفارشی", "config": {**json.loads(json.dumps(DEFAULT_PROFILE)), **opts["config"]}}
         db.update("ai_jobs", jid, status="running", error="", step="آماده‌سازی")
-        if opts.get("catalog_id"):
+        if opts.get("catalog_id") or opts.get("bank_id"):
             return self._run_catalog(jid, job, opts, prof)
         fatal: list[str] = []
         try:
@@ -654,13 +654,18 @@ def _run_catalog(self, jid: int, job: dict, opts: dict, prof: dict):
     from concurrent.futures import CancelledError
     from . import catalogs
     from .ai import AICancelled, set_context
-    eid = int(opts["catalog_id"])
-    sid = int(opts["schema_id"])
+    is_bank = bool(opts.get("bank_id"))
+    eid = int(opts.get("bank_id") or opts["catalog_id"])
+    sid = int(opts.get("schema_id") or 0)
     cfg = prof["config"]
     fatal: list[str] = []
     try:
-        ids = [int(i) for i in opts.get("row_ids") or []] or [r["id"] for r in db.q(
-            "SELECT id FROM export_rows WHERE export_id=? AND status='ok' ORDER BY seq, id", [eid])]
+        if is_bank:
+            ids = [int(i) for i in opts.get("row_ids") or []] or [r["id"] for r in db.q(
+                "SELECT id FROM wb_products WHERE bank_id=? AND status IN ('draft','review','approved','rejected') ORDER BY seq, id", [eid])]
+        else:
+            ids = [int(i) for i in opts.get("row_ids") or []] or [r["id"] for r in db.q(
+                "SELECT id FROM export_rows WHERE export_id=? AND status='ok' ORDER BY seq, id", [eid])]
         done_ids = set(opts.get("_done_ids") or [])
         todo = [i for i in ids if i not in done_ids]
         settings = db.get_settings()
@@ -674,11 +679,16 @@ def _run_catalog(self, jid: int, job: dict, opts: dict, prof: dict):
         def work(rid):
             if stop_now():
                 return rid, "cancel", ""
-            set_context(purpose=f"ویرایش کاتالوگ نهایی ({prof['name']})", ref=f"export:{eid}", item_id=None)
+            set_context(purpose=f"{'ویرایشگر داده‌ها' if is_bank else 'ویرایش کاتالوگ نهایی'} ({prof['name']})",
+                        ref=f"{'product' if is_bank else 'export'}:{rid if is_bank else eid}", item_id=None)
             client = client_for(cfg)
             client.cancel_check = stop_now
             try:
-                catalogs.ai_row(eid, rid, sid, cfg, client, settings, overwrite=bool(opts.get("overwrite_ai")))
+                if is_bank:
+                    from . import workbench
+                    workbench.ai_product(rid, cfg, client, settings)
+                else:
+                    catalogs.ai_row(eid, rid, sid, cfg, client, settings, overwrite=bool(opts.get("overwrite_ai")))
                 return rid, "ok", client.usage_tokens
             except AICancelled:
                 return rid, "cancel", ""
